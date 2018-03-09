@@ -40,7 +40,7 @@ Usage: ./postprocessing.AMPS.r [-[-rmaex.out.fld|r] <character>] [-[-maltex.filt
 
 ### Example command:
 ```
-~/Documents/shh/sysEva/scripts/amps/postprocessing.v5.r \
+~/Documents/shh/sysEva/scripts/amps/postprocessing.AMPS.r \
 -m def_anc \ 
 -r AMPS/output/folder \
 -t 16 \
