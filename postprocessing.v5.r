@@ -2,6 +2,12 @@
 library(getopt); # for args parsing
 library(parallel); # sumstat calculation is parallized across libraries
 
+## github
+# cd /Users/fmk/Documents/shh/sysEva/scripts/amps
+# git add .
+# git commit -m "update"
+# git push -u origin master
+ 
 ## internal functions
 ## source('functions_amps.r')
 # source('/Users/fmk/Documents/shh/sysEva/scripts/amps/functions_amps.r')
