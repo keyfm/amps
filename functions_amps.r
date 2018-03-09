@@ -118,16 +118,13 @@ extract.stats3 <- function(id , path){
     ind <- id
     out <- list()
     for (run in c('default','ancient')){
-        ed.dis <- read.table(paste( path,run,'/editDistance/',ind ,'_editDistance.txt', sep="" ),header=F,sep="\t",skip=1,row.names=1,comment.char='')[,1:6] # kill last column (">5")
+        ed.dis <- read.table(paste( path,run,'/editDistance/',ind ,'_editDistance.txt', sep="" ),header=F,sep="\t",skip=1,row.names=1,comment.char='')[,1:6] # keep relevant columns only
         colnames(ed.dis) <- c('0','1','2','3','4','5') # R does not like reading numeric header's
         mp.dam <- read.table(paste( path,run,'/damageMismatch/',ind ,'_damageMismatch.txt', sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
         rd.dis <- read.table(paste( path,run,'/readDist/',ind ,'_alignmentDist.txt', sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
         if( run == 'ancient' ){ rhoNM <- 2:6 ;keptDiff <- 1:2} else { rhoNM <- 1:6; keptDiff <- 1:3}
         for ( spec in unq.spec ){
-            ## get species data
-            ## ed.dis.spec <- ed.dis[ grep(spec,rownames(ed.dis)) , ]
-            ## mp.dam.spec <- mp.dam[ grep(spec,rownames(mp.dam)) , ]
-            ## rd.dis.spec <- rd.dis[ grep(spec,rownames(rd.dis)) , ]
+            ## spec <- 'Yersinia_pestis'
             ed.dis.spec <- ed.dis[ spec , ]
             mp.dam.spec <- mp.dam[ spec , ]
             rd.dis.spec <- rd.dis[ spec , ]
@@ -169,6 +166,8 @@ extract.stats3 <- function(id , path){
 }
 
 extract.stats4 <- function(id , path){
+    ## extract.stats4 update:
+    ##  - trailing damage based on trailing 2 bases on 3'/5' end and not solely trailing bases
     ## extract.stats3 updates:
     ## - only report exact node/taxon match. After updating the interrogated Node list we would otherwise extract too many strains!
     ## extract.stats2 updates [partially kept for v3]:
@@ -231,6 +230,75 @@ extract.stats4 <- function(id , path){
     return(out2)
 }
 
+extract.stats5 <- function(id , path, malt.mode){
+    ## extract.stats5 updates:
+    ## NOTE: rd.dis <- read.table... set to always read DEFAULT. Change as soon as Ron fixed!
+    ## NOTE: if default/ancient only 1 read data is reported. Not min. 9 (changed to before)
+    ##  - new parameter for def_anc or def mode
+    ## extract.stats4 update NOT IN USE IN THIS VERION
+    ##  - trailing damage based on trailing 2 bases on 3'/5' end and not solely trailing bases
+    ## extract.stats3 updates:
+    ## - only report exact node/taxon match. After updating the interrogated Node list we would otherwise extract too many strains!
+    ## extract.stats2 updates [partially kept for v3]:
+    ## version2 is adapted to RMAex v04 which changes the names of the readdis files to alignment incl. some headers. readdistable fun also changed --> v3
+    ## path w/ trailing '/'
+    ## DiffRatio max and N>9 based on DR4! --> avoid samples that have big peak at high EditDis (U shape)
+    ## use the same spec_strain for mapdam and readdis!
+    ## MapDamage for last and first base for node with max N in editDis1-4
+    ## uniquePerReference for N>9 for node with max N in editDis1-4
+    ind <- id
+    out <- list()
+    
+    for (run in malt.mode){
+        ed.dis <- read.table(paste( path,run,'/editDistance/',ind ,'_editDistance.txt', sep="" ),header=F,sep="\t",skip=1,row.names=1,comment.char='')[,1:6] # keep relevant columns only
+        colnames(ed.dis) <- c('0','1','2','3','4','5') # R does not like reading numeric header's
+        mp.dam <- read.table(paste( path,run,'/damageMismatch/',ind ,'_damageMismatch.txt', sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
+        rd.dis <- read.table(paste( path,'default','/readDist/',ind ,'_alignmentDist.txt', sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
+        if( run == 'ancient' ){ rhoNM <- 2:6 ;keptDiff <- 1:2} else { rhoNM <- 1:6; keptDiff <- 1:3}
+        for ( spec in unq.spec ){
+            ## spec <- 'Yersinia_pestis'
+            ed.dis.spec <- ed.dis[ spec , ]
+            mp.dam.spec <- mp.dam[ spec , ]
+            rd.dis.spec <- rd.dis[ spec , ]
+            ## get RatioOfDifferences and N (editdistance0-4 and 0-6)
+            ## NOTE: Could be shorter if indeed always only 1 Node presented!
+            res <- matrix(ncol=5,nrow=nrow(ed.dis.spec)); rownames(res) <- rownames(ed.dis.spec); colnames(res) <- paste(run,c('node','dr6','n6','dr4','n4'),sep=".")
+            for (subset in rownames(ed.dis.spec)){
+                a <- diff(as.numeric(ed.dis.spec[ subset , rhoNM ]))
+                dr6 <- round(sum(abs(a[a<0]))/sum(abs(a)),3)
+                b <- a[ keptDiff ] # only diffs 1:3 considered. When ancient only diffs 1:2
+                dr4 <- round(sum(abs(b[b<0]))/sum(abs(b)),3)
+                res[subset, ] <- c( subset, dr6 , sum(ed.dis.spec[ subset , 1:6 ]) , dr4 , sum(ed.dis.spec[ subset , 1:4 ]))
+            }
+            ## require minimum of 10 reads present dr4 analysis and pick the one with highest number of reads
+            ## NOTE: Could be shorter if indeed always only 1 Node presented!
+            rowMax <- which(as.numeric(res[,paste(run,'.n4',sep="")])==max(as.numeric(res[,paste(run,'.n4',sep="")])))[1]
+            if( !is.na(rowMax) & as.numeric(res[ rowMax , paste(run,'.n4',sep="") ]) > 1 ){
+                top.dr <- res[ rowMax , ]
+            } else {
+                top.dr <- rep(NA,5)
+            }
+            ## extract map.damage:sum(C>T or G>A pos 1 2 (-1 -2 respectively)) for TopScorer@EdDis
+             mp.dam.spec.max <- max(mp.dam.spec[ rowMax ,"C>T_1"] , mp.dam.spec[ rowMax ,"C>T_2"] , mp.dam.spec[ rowMax ,"G>A_20"], mp.dam.spec[ rowMax ,"G>A_19"])
+            ## extract max readDis:uniquePerReference for TopScorer@EdDis
+            read.dis.uniq <- rd.dis.spec[ rowMax ,'uniquePerReference']
+            if(length(read.dis.uniq) == 0){ read.dis.uniq <- NA }
+            ## write results list
+            if( paste(ind,spec,sep="_") %in% names(out) ){
+                out[[ paste(ind,spec,sep="_") ]] <- c( out[[ paste(ind,spec,sep="_") ]] , top.dr , mp.dam.spec.max , read.dis.uniq )
+            } else {
+                out[[ paste(ind,spec,sep="_") ]] <- c( ind , spec , top.dr , mp.dam.spec.max , read.dis.uniq )
+            }
+        }
+    }
+    out2 <- do.call(rbind,out)
+    if(length(malt.mode)==2){
+        colnames(out2) <- c('id','spec','def.node','def.dr6','def.n6','def.dr4','def.n4','def.mapDam','def.rd','anc.node','anc.dr6','anc.n6','anc.dr4','anc.n4','anc.mapDam','anc.rd')
+        } else {
+            colnames(out2) <- c('id','spec','def.node','def.dr6','def.n6','def.dr4','def.n4','def.mapDam','def.rd')
+        }
+    return(out2)
+}
 
 plot.editDis.perID <- function(id,tax,folders){
     ## function writes 8 barplots that has the edit distance and %identity plots for four different RMAex runs (default, ancient, clipped, complexity)
@@ -258,7 +326,7 @@ plot.editDis.perID <- function(id,tax,folders){
 plot.editDis.cov <- function(id,tax,folders){
     ## function writes barplot EditDistance and Coverage Distribution
     ## function takes id of node
-    swtch <- FALSE
+    switch <- FALSE
     for (i in 1:length(folders)){
         ## Edit Distance: read data and grep taxon(s) of interest
         res <- read.table(paste(folders[i],'editDistance/',id,'_editDistance.txt',sep=''),header=F,sep="\t",skip=1,comment.char='',row.names=1) # R does not get the numbers as headers
@@ -268,22 +336,48 @@ plot.editDis.cov <- function(id,tax,folders){
         mc1 <- c(colorRampPalette(c("lightgreen","darkgreen"))(nrow(res))) # remnant from multiple spec
         ## Coverage: read data and grep taxon(s) of interest
         res2 <- read.table(paste(folders[i],'readDist/',id,'_coverageHist.txt',sep=''),comment.char='',header=F,sep="\t",skip=1,row.names = 1) #auto-assigns spec/strains as row names.
-        rownames(res2) <- chartr("><","..",rownames(res2)) # Unusal character fix by JFY, based on plot_summary_rmaex_v05
+        rownames(res2) <- chartr("><","..",rownames(res2)) # Unusal character fix 
 	colnames(res2) <- c('Reference','0','1','2','3','4','5','6','7','8','9','10','>10') # that might be made dynamic in a future version, when trailing tabs are gone!
         res2 <- res2[ tax , ]
         res2[ res2==0 ] <- 1 # turn 0to1 (for log10 plotting)
         mc2 <- c(colorRampPalette(c("lightcyan","midnightblue"))(nrow(res2))) # remnant from multiple spec
         ## plot
-        barplot(as.matrix(res),beside=T,col=mc1,main=paste(names(folders)[i],id,tax),xlab="edit distance",ylab="read count")
+        barplot(as.matrix(res),beside=T,col=mc1,main=id,xlab="edit distance",ylab="read count")
         legend("top",legend=paste('Node:',tax,sum(res)),fill=mc1, cex = 0.6, bty = "n")
-        if (swtch==FALSE){
+        if (switch==FALSE){
             barplot(as.matrix(log10(res2[-1])),beside=T,col=mc2,main=paste(names(folders)[i],id,tax),xlab="RMAex default: coverage distribution",ylab="bases covered (log10)")
             legend("top",legend=paste('Top Ref:',res2[,'Reference']),fill=mc2, cex = 0.6, bty = "n")
-            swtch <- TRUE
+            switch <- TRUE
         }
     }
 } 
 
+plot.editDis.PercCov <- function(id,tax,folders){
+    ## function writes barplot EditDistance and % bases covered
+    ## function takes id of node
+    switch <- FALSE
+    for (i in 1:length(folders)){
+        ## Edit Distance: read data and grep taxon(s) of interest
+        res <- read.table(paste(folders[i],'editDistance/',id,'_editDistance.txt',sep=''),header=F,sep="\t",skip=1,comment.char='',row.names=1) # R does not get the numbers as headers
+        rownames(res) <- chartr("><","..",rownames(res)) # Unusual character fix by JFY, based on plot_summary_rmaex_v05
+        colnames(res) <- c('0','1','2','3','4','5','>5')
+        res <- res[ tax , ]
+        mc1 <- c(colorRampPalette(c("lightgreen","darkgreen"))(nrow(res))) # remnant from multiple spec
+        ## positionsCoverage: read data and grep taxon(s) of interest
+        res2 <- read.table(paste(folders[i],'coverage/',id,'_postionsCovered.txt',sep=''),comment.char='',header=T,sep="\t",row.names = 1) #auto-assigns spec/strains as row names.
+        rownames(res2) <- chartr("><","..",rownames(res2)) # Unusal character fix 
+        res2 <- res2[ tax , 4:8 ]
+        mc2 <- c(colorRampPalette(c("red","yellow"))(ncol(res2)-3)) 
+        ## plot
+        barplot(as.matrix(res),beside=T,col=mc1,main=id,xlab="edit distance",ylab="read count")
+        legend("top",legend=paste('Node:',tax),fill=mc1, cex = 0.6, bty = "n")
+        if (switch==FALSE){
+            barplot(res2,beside=T,col=mc2,main=tax,ylim=c(0,1),xlab="",ylab="% of genome covered")
+            #legend("top",legend=paste('Top Ref:',res2[,'Reference']),fill=mc2, cex = 0.6, bty = "n")
+            switch <- TRUE
+        }
+    }
+} 
 plot.mapDamage <- function(id,tax,folder){
     ## Plot damage pattern observed w/ RMAex
     ## Note all species and strain nodes hit are collapsed here for simplicity. Pattern might be idfferential affected by different nodes!
