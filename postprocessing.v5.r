@@ -646,11 +646,11 @@ spec = matrix(c(
 ), byrow=TRUE, ncol=5);
 opt = getopt(spec);
 
-# opt=list()
-# opt[['rmaex.out.fld']]='/Users/fmk/Documents/shh/sysEva/data/maltSD_sglDam_rmaex8_85p_pp5'
-# opt[['maltex.filter']]=""
-# opt[['threads']]=2
-# opt[['node.list']]='/Users/fmk/Documents/shh/anc5h/data_remote/maltSD_sglDam_rmaex8_85p_pp5/List_of_pathogens_KB_fmk12.txt'
+opt=list()
+opt[['rmaex.out.fld']]='/projects1/users/key/sysEva/huebler/malt/amps/maltExtract/'
+opt[['maltex.filter']]="def_anc"
+opt[['threads']]=16
+opt[['node.list']]='/projects1/users/key/anc5h/soi.backup/List_of_pathogens_KB_fmk12_wViruses1.txt'
 
 ## and exit with a non-zero error code
 if ( !is.null(opt$help) ) {
@@ -757,6 +757,7 @@ folder.names <- paste(path,maltex.mode,'/',sep="")
 for (spl in colnames(red.res)){
     for (tax in rownames(red.res)){
         if( red.res[tax,spl] > 1 ){
+            print(paste(spl,tax))
             system(paste('mkdir -p ',path,'pdf_candidate_profiles/',tax,sep='')) #mk pdf output folder
             pdf(paste(path,'pdf_candidate_profiles/',tax,'/stp',red.res[tax,spl]-1,'_',spl,'_',tax,'_summary.pdf',sep=''))
             par(mfrow=c(3,2))

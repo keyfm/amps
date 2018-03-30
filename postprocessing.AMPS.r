@@ -120,7 +120,7 @@ table.additionalNodeEntries1 <- function(id,tax,folder){
     library(gridBase)
     library(gridExtra)
     ## read file and format
-    ar <- read.table(paste(folder,'readDist/',id,'_additionalNodeEntries.txt',sep=''),header=T,row.names=1,check.names=F,stringsAsFactors=F,comment.char='',sep="\t")
+    ar <- read.table(paste(folder,'readDist/',id,'_additionalNodeEntries.txt',sep=''),header=T,row.names=1,check.names=F,stringsAsFactors=F,comment.char='',sep="\t",quote="")
     ar <- ar[ tax , ]
     ar <- paste(sub(";_TOPREFPERCREADS"," ",ar) ,"%",sep="")
     ## plot table
