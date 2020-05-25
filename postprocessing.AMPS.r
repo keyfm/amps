@@ -150,7 +150,8 @@ spec = matrix(c(
     "maltex.filter",  "m" , 2, "character", "MALTextract filter mode: <default,def_anc>. This script is not designed for 'scan' output. Default: <def_anc>.",
     "threads",  "t" , 1, "numeric", "Max number of cores used.",
     "help"    ,  "h" , 0, "logical", "Print this help.",
-    "node.list"   ,  "n" , 1, "character","List (\\n separated) of nodes to be reported on (aka input species/node list used for MALTextract)."
+    "node.list"   ,  "n" , 1, "character","List (\\n separated) of nodes to be reported on (aka input species/node list used for MALTextract).",
+    "heatmap.table"   ,  "o", 2, "character", "Optional exporting of heatmap data in table format <tsv,json>. Default: <tsv>."
 ), byrow=TRUE, ncol=5);
 opt = getopt(spec);
 
@@ -160,6 +161,13 @@ if ( !is.null(opt$help) ) {
     cat(getopt(spec, usage=TRUE));
     q(status=1);
 }
+
+####### TODO JFY TEST CODE TO REMOVE ###
+opt$rmaex.out.fld <- "~/Downloads/amps_testing/AnthropoidsHominidaeHoiminini_core_20190509/"
+opt$maltex.filter <- "def_anc" 
+opt$threads <- 4 
+opt$node.list <- "~/Documents/github/jfy133/Anthropoid_Calculus_Microbiome_Evolution/04-analysis/screening/maltExtract/taxon_lists/08b-coremicrobiome_presenceabsence_upsettable_allsoftware_maltdbnt_0.04_fracinds0.5_fracpops0.66_singleindpopsdroppedF_hostgenus_species_AnthropoidsHominidaeHoiminini_20190509.tsv"
+##########
 
 ### ARG parsing and sanity checks
 ## assign args and modify node.vec (tr ' ' '_')
@@ -246,6 +254,18 @@ xleg <- ncol(red.res)-(ncol(red.res)*1.35)
 yleg <- nrow(red.res)+5
 legend(x=xleg,y=yleg, legend=leg.txt, fill = mycol[-1],xpd=T,cex=3)
 dev.off()
+
+## Export table format
+
+heatmap_tab <- data.frame(names = row.names(red.res), red.res)
+colnames(heatmap_tab)[1] <- "node"
+
+if(opt$heatmap.table == "tsv"){
+    write.table(heatmap_tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep=""), sep = "\t")
+} else {
+    library("jsonlite")
+    write_json(heatmap_tab, path = paste(path,'heatmap_overview_Wevid.json',sep=""), pretty = T)
+}
 
 ########################
 ###### Candidate Profile PDFs
