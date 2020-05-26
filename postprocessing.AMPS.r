@@ -162,13 +162,6 @@ if ( !is.null(opt$help) ) {
     q(status=1);
 }
 
-####### TODO JFY TEST CODE TO REMOVE ###
-opt$rmaex.out.fld <- "~/Downloads/amps_testing/AnthropoidsHominidaeHoiminini_core_20190509/"
-opt$maltex.filter <- "def_anc" 
-opt$threads <- 4 
-opt$node.list <- "~/Documents/github/jfy133/Anthropoid_Calculus_Microbiome_Evolution/04-analysis/screening/maltExtract/taxon_lists/08b-coremicrobiome_presenceabsence_upsettable_allsoftware_maltdbnt_0.04_fracinds0.5_fracpops0.66_singleindpopsdroppedF_hostgenus_species_AnthropoidsHominidaeHoiminini_20190509.tsv"
-##########
-
 ### ARG parsing and sanity checks
 ## assign args and modify node.vec (tr ' ' '_')
 path <- opt$rmaex.out.fld
@@ -257,14 +250,16 @@ dev.off()
 
 ## Export table format
 
-heatmap_tab <- data.frame(names = row.names(red.res), red.res)
-colnames(heatmap_tab)[1] <- "node"
-
 if(opt$heatmap.table == "tsv"){
-    write.table(heatmap_tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep=""), sep = "\t")
+    red.res.tab <- cbind(rownames(red.res), data.frame(red.res, row.names=NULL))
+    colnames(red.res.tab)[1] <- "node"
+    write.table(red.res.tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep = ""), sep = "\t", row.names = F)
 } else {
     library("jsonlite")
-    write_json(heatmap_tab, path = paste(path,'heatmap_overview_Wevid.json',sep=""), pretty = T)
+    red.res.json <- lapply(seq_len(ncol(red.res)), function(i) red.res[,i])
+    red.res.json <- lapply(red.res.json, function(i) as.list(i))
+    names(red.res.json) <- colnames(red.res)
+    write_json(red.res.json, path = paste(path,'heatmap_overview_Wevid.json',sep = ""), pretty = T)
 }
 
 ########################
