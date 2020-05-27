@@ -18,7 +18,7 @@ extract.stats5 <- function(id , path, malt.mode){
             mp.dam.spec <- mp.dam[ spec , ]
             rd.dis.spec <- rd.dis[ spec , ]
             ## get RatioOfDifferences and N (editdistance0-4 and 0-6)
-            ## NOTE: Could be shorter if indeed always only 1 Node presented!
+            ## NOTE: Could be shorter if indeed always only 1 Node presented
             res <- matrix(ncol=5,nrow=nrow(ed.dis.spec)); rownames(res) <- rownames(ed.dis.spec); colnames(res) <- paste(run,c('node','dr6','n6','dr4','n4'),sep=".")
             for (subset in rownames(ed.dis.spec)){
                 a <- diff(as.numeric(ed.dis.spec[ subset , rhoNM ]))
@@ -151,7 +151,7 @@ spec = matrix(c(
     "threads",  "t" , 1, "numeric", "Max number of cores used.",
     "help"    ,  "h" , 0, "logical", "Print this help.",
     "node.list"   ,  "n" , 1, "character","List (\\n separated) of nodes to be reported on (aka input species/node list used for MALTextract).",
-    "heatmap.table"   ,  "o", 2, "character", "Optional exporting of heatmap data in table format <tsv,json>. Default: <tsv>."
+    "heatmap.json"   ,  "j", 2, "logical", "Optional exporting of heatmap data in json format."
 ), byrow=TRUE, ncol=5);
 opt = getopt(spec);
 
@@ -249,12 +249,11 @@ legend(x=xleg,y=yleg, legend=leg.txt, fill = mycol[-1],xpd=T,cex=3)
 dev.off()
 
 ## Export table format
+red.res.tab <- cbind(rownames(red.res), data.frame(red.res, row.names=NULL))
+colnames(red.res.tab)[1] <- "node"
+write.table(red.res.tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep = ""), sep = "\t", row.names = F)
 
-if(opt$heatmap.table == "tsv"){
-    red.res.tab <- cbind(rownames(red.res), data.frame(red.res, row.names=NULL))
-    colnames(red.res.tab)[1] <- "node"
-    write.table(red.res.tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep = ""), sep = "\t", row.names = F)
-} else {
+if (!is.null(opt$heatmap.json)) {
     library("jsonlite")
     red.res.json <- lapply(seq_len(ncol(red.res)), function(i) red.res[,i])
     red.res.json <- lapply(red.res.json, function(i) as.list(i))
