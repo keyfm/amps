@@ -18,7 +18,7 @@ extract.stats5 <- function(id , path, malt.mode){
             mp.dam.spec <- mp.dam[ spec , ]
             rd.dis.spec <- rd.dis[ spec , ]
             ## get RatioOfDifferences and N (editdistance0-4 and 0-6)
-            ## NOTE: Could be shorter if indeed always only 1 Node presented!
+            ## NOTE: Could be shorter if indeed always only 1 Node presented
             res <- matrix(ncol=5,nrow=nrow(ed.dis.spec)); rownames(res) <- rownames(ed.dis.spec); colnames(res) <- paste(run,c('node','dr6','n6','dr4','n4'),sep=".")
             for (subset in rownames(ed.dis.spec)){
                 a <- diff(as.numeric(ed.dis.spec[ subset , rhoNM ]))
@@ -150,7 +150,8 @@ spec = matrix(c(
     "maltex.filter",  "m" , 2, "character", "MALTextract filter mode: <default,def_anc>. This script is not designed for 'scan' output. Default: <def_anc>.",
     "threads",  "t" , 1, "numeric", "Max number of cores used.",
     "help"    ,  "h" , 0, "logical", "Print this help.",
-    "node.list"   ,  "n" , 1, "character","List (\\n separated) of nodes to be reported on (aka input species/node list used for MALTextract)."
+    "node.list"   ,  "n" , 1, "character","List (\\n separated) of nodes to be reported on (aka input species/node list used for MALTextract).",
+    "heatmap.json"   ,  "j", 2, "logical", "Optional exporting of heatmap data in json format."
 ), byrow=TRUE, ncol=5);
 opt = getopt(spec);
 
@@ -246,6 +247,19 @@ xleg <- ncol(red.res)-(ncol(red.res)*1.35)
 yleg <- nrow(red.res)+5
 legend(x=xleg,y=yleg, legend=leg.txt, fill = mycol[-1],xpd=T,cex=3)
 dev.off()
+
+## Export table format
+red.res.tab <- cbind(rownames(red.res), data.frame(red.res, row.names=NULL))
+colnames(red.res.tab)[1] <- "node"
+write.table(red.res.tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep = ""), sep = "\t", row.names = F)
+
+if (!is.null(opt$heatmap.json)) {
+    library("jsonlite")
+    red.res.json <- lapply(seq_len(ncol(red.res)), function(i) red.res[,i])
+    red.res.json <- lapply(red.res.json, function(i) as.list(i))
+    names(red.res.json) <- colnames(red.res)
+    write_json(red.res.json, path = paste(path,'heatmap_overview_Wevid.json',sep = ""), pretty = T)
+}
 
 ########################
 ###### Candidate Profile PDFs
