@@ -255,9 +255,20 @@ write.table(red.res.tab, file = paste(path,'heatmap_overview_Wevid.tsv',sep = ""
 
 if (!is.null(opt$heatmap.json)) {
     library("jsonlite")
-    red.res.json <- lapply(seq_len(ncol(red.res)), function(i) red.res[,i])
-    red.res.json <- lapply(red.res.json, function(i) as.list(i))
-    names(red.res.json) <- colnames(red.res)
+    
+    ## Prepare for tab to list
+    red.res.tab.json <- red.res.tab
+    rownames(red.res.tab.json) <- red.res.tab.json$node
+    red.res.tab.json <- subset(red.res.tab.json, select = -node)
+    
+    ## convert to list
+    red.res.json <- Map(function(x) {
+        value_list <- as.list(x)
+        names(value_list) <- row.names(red.res.tab.json)
+        value_list
+    }, as.list(red.res.tab.json))
+    
+    ## convert and save list as json
     write_json(red.res.json, path = paste(path,'heatmap_overview_Wevid.json',sep = ""), pretty = T)
 }
 
