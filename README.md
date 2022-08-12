@@ -45,16 +45,28 @@ Usage: ./postprocessing.AMPS.r [-[-rmaex.out.fld|r] <character>] [-[-maltex.filt
     -m|--maltex.filter    MALTextract filter mode: <default,def_anc>. This script is not designed for 'scan' output. Default: <def_anc>.
     -t|--threads          Max number of cores used.
     -h|--help             Print this help.
-    -n|--node.list        List (\n separated) of nodes to be reported on (aka input species/node list used for MALTextract).
+    -s|--sequencestrategy Sequencing Strategy: <pe,se>, for needing damage only on forward or both forward and reverse strands
+    -d|--dmgcutoff        Cutoff threshold for 3 prime damage for outputting plot. Default: 0, no cutoff is used
+    -c|--readdistcutoff   Cutoff threshold for read distribution (stacking) for outputting plot. Default: 0, no cutoff is used
+    -e|--defratio         Absolute value sums of edit distances of ratio between successive bars of default edit distance needed to exceed for outputting plot, lower value is more permissive. Default: 0.9
+    -a|--ancratio         Ratio between successive bars of ancient edit distance needed to exceed for outputting plot, lower value is more permissive. Default: 0.8
+    -f|--firm             Use firm cutoffs, only output if all thresholds met for outputting plots, eg dmg, read dist, def ratio and anc ratio
+    -n|--node.list        List (\n separated) (or path to file) of nodes to be reported on (aka input species/node list used for MALTextract).
     -j|--heatmap.json    Optional exporting of heatmap data in json format.
 ```
 
 ### Example command
 
 ```bash
-~/Documents/shh/sysEva/scripts/amps/postprocessing.AMPS.r \
--m def_anc \
+~/path/to/amps/postprocessing.AMPS.r \
 -r HOPS/output/folder \
+-m def_anc \
 -t 16 \
--n /projects1/users/key/anc5h/soi.backup/List_of_pathogens_KB_fmk12_wViruses1.txt
+-s pe \
+-d 0.5 \
+-c 0.25 \
+-e 0.9 \
+-a 0.8 \
+-f \
+-n /path/to/List_of_pathogens.txt
 ```

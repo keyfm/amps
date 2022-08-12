@@ -3,14 +3,14 @@ library(getopt); # for args parsing
 library(parallel); # sumstat calculation is parallized across libraries
 
 ## FUNCTIONs
-extract.stats5 <- function(id , path, malt.mode){
+extract.stats5 <- function(id,path,malt.mode,paried_end_mode){
     ind <- id
     out <- list()
     for (run in malt.mode){
-        ed.dis <- read.table(paste( path,run,'/editDistance/',ind ,'_editDistance.txt', sep="" ),header=F,sep="\t",skip=1,row.names=1,comment.char='')[,1:6] # keep relevant columns only
+        ed.dis <- read.table(paste(path,run,'/editDistance/',ind,'_editDistance.txt',sep=""),header=F,sep="\t",skip=1,row.names=1,comment.char='')[,1:6] # keep relevant columns only
         colnames(ed.dis) <- c('0','1','2','3','4','5') # R does not like reading numeric header's
-        mp.dam <- read.table(paste( path,run,'/damageMismatch/',ind ,'_damageMismatch.txt', sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
-        rd.dis <- read.table(paste( path,'default','/readDist/',ind ,'_alignmentDist.txt', sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
+        mp.dam <- read.table(paste(path,run,'/damageMismatch/',ind,'_damageMismatch.txt',sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
+        rd.dis <- read.table(paste(path,'default','/readDist/',ind,'_alignmentDist.txt',sep="" ),header=T,sep="\t",row.names=1,check.names=F,comment.char='')
         if( run == 'ancient' ){ rhoNM <- 2:6 ;keptDiff <- 1:2} else { rhoNM <- 1:6; keptDiff <- 1:3}
         for ( spec in unq.spec ){
             ## spec <- 'Yersinia_pestis'
@@ -24,7 +24,7 @@ extract.stats5 <- function(id , path, malt.mode){
                 a <- diff(as.numeric(ed.dis.spec[ subset , rhoNM ]))
                 dr6 <- round(sum(abs(a[a<0]))/sum(abs(a)),3)
                 b <- a[ keptDiff ] # only diffs 1:3 considered. When ancient only diffs 1:2
-                dr4 <- round(sum(abs(b[b<0]))/sum(abs(b)),3)
+                dr4 <- round(sum(abs(b[b<0]))/sum(abs(b)),3) ## calculate sum of negative differences to neighboring col to right divided by sum of absolute values of all differences (1 if strictly declining edit distances)
                 res[subset, ] <- c( subset, dr6 , sum(ed.dis.spec[ subset , 1:6 ]) , dr4 , sum(ed.dis.spec[ subset , 1:4 ]))
             }
             ## require minimum of 10 reads present dr4 analysis and pick the one with highest number of reads
@@ -36,7 +36,13 @@ extract.stats5 <- function(id , path, malt.mode){
                 top.dr <- rep(NA,5)
             }
             ## extract map.damage:sum(C>T or G>A pos 1 2 (-1 -2 respectively)) for TopScorer@EdDis
-             mp.dam.spec.max <- max(mp.dam.spec[ rowMax ,"C>T_1"] , mp.dam.spec[ rowMax ,"C>T_2"] , mp.dam.spec[ rowMax ,"G>A_20"], mp.dam.spec[ rowMax ,"G>A_19"])
+            # if paired end: value def.mapDam and anc.mapDam have propotion of reads with damage at first index of 3' end or last base of 5' end, depending on which is higher
+            # if single end: value def.mapDam and anc.mapDam have propotion of reads with damage at first index of 3'
+            if (paried_end_mode) {
+             mp.dam.spec.max <- max(mp.dam.spec[ rowMax ,"C>T_1" ] , mp.dam.spec[ rowMax ,"G>A_20"])
+            } else {
+             mp.dam.spec.max <- mp.dam.spec[ rowMax ,"C>T_1" ]                
+            }
             ## extract max readDis:uniquePerReference for TopScorer@EdDis
             read.dis.uniq <- rd.dis.spec[ rowMax ,'uniquePerReference']
             if(length(read.dis.uniq) == 0){ read.dis.uniq <- NA }
@@ -62,9 +68,9 @@ plot.editDis <- function(id,tax,folders){
     switch <- FALSE
     for (i in 1:length(folders)){
         ## Edit Distance: read data and grep taxon(s) of interest
-        res <- read.table(paste(folders[i],'editDistance/',id,'_editDistance.txt',sep=''),header=F,sep="\t",skip=1,comment.char='',row.names=1)[,1:6] # R does not get the numbers as headers
+        res <- read.table(paste(folders[i],'editDistance/',id,'_editDistance.txt',sep=''),header=F,sep="\t",skip=1,comment.char='',row.names=1)[,1:12] # R does not get the numbers as headers
         rownames(res) <- chartr("><","..",rownames(res)) # Unusual character fix by JFY, based on plot_summary_rmaex_v05
-        colnames(res) <- c('0','1','2','3','4','5')
+        colnames(res) <- c('0','1','2','3','4','5','6','7','8','9','10','>10')
         res <- res[ tax , ]
         mc1 <- c(colorRampPalette(c("lightgreen","darkgreen"))(nrow(res))) # remnant from multiple spec
         barplot(as.matrix(res),beside=T,col=mc1,main=id,xlab=paste("edit distance:",basename(folders[i])),ylab="read count")
@@ -145,13 +151,20 @@ table.additionalNodeEntries1 <- function(id,tax,folder){
 
 ## get options, using the spec as defined by the enclosed list.
 ## we read the options from the default: commandArgs(TRUE).
+
 spec = matrix(c(
     "rmaex.out.fld",  "r" , 1, "character", "MALTextract output folder.",
     "maltex.filter",  "m" , 2, "character", "MALTextract filter mode: <default,def_anc>. This script is not designed for 'scan' output. Default: <def_anc>.",
-    "threads",  "t" , 1, "numeric", "Max number of cores used.",
+    "threads",  "t" , 1, "integer", "Max number of cores used.",
     "help"    ,  "h" , 0, "logical", "Print this help.",
+    "sequencestrategy", "s", 1, "character", "pe or se for needing damage on either forward or reverse overhang for flagging, default se",
     "node.list"   ,  "n" , 1, "character","List (\\n separated) of nodes to be reported on (aka input species/node list used for MALTextract).",
-    "heatmap.json"   ,  "j", 2, "logical", "Optional exporting of heatmap data in json format."
+    "heatmap.json"   ,  "j", 2, "logical", "Optional exporting of heatmap data in json format.",
+    "dmgcutoff" ,   "d" ,   2,  "double",  "Cutoff threshold for 3 prime damage for outputting plot. Default: 0, no cutoff is used",
+    "readdistcutoff","c", 2,  "double",  "Cutoff threshold for read distribution (stacking) for outputting plot. Default: 0, no cutoff is used",
+    "defratio"  ,   "e", 2, "double", "Absolute value sums of edit distances of ratio between successive bars of default edit distance needed to exceed for outputting plot, lower value is more permissive. Default: 0.9",
+    "ancratio"  ,   "a",    2,  "double", "Ratio between successive bars of ancient edit distance needed to exceed for outputting plot, lower value is more permissive. Default: 0.8",
+    "firm"  , "f", 0, "logical", "Use firm cutoffs, only output if all thresholds met for outputting plots, eg dmg, read dist, def ratio and anc ratio"
 ), byrow=TRUE, ncol=5);
 opt = getopt(spec);
 
@@ -165,8 +178,26 @@ if ( !is.null(opt$help) ) {
 ### ARG parsing and sanity checks
 ## assign args and modify node.vec (tr ' ' '_')
 path <- opt$rmaex.out.fld
-if (substr(path,nchar(path),nchar(path)) != "/"){path <- paste(path ,"/",sep="")} # add trailing "/" if missing
-if(opt$maltex.filter == 'default') {maltex.mode <- 'default'} else {maltex.mode <- c('default','ancient')}
+if ( substr(path,nchar(path),nchar(path)) != "/"){path <- paste(path ,"/",sep="")} # add trailing "/" if missing
+## parsing maltex filter and return update about what is being used
+if ( is.null(opt$maltex.filter) ) {maltex.mode <- c('default','ancient'); print("No filter type provided, using default malt filter mode <def_anc>") 
+} else if (opt$maltex.filter == 'def_anc') {maltex.mode <- c('default','ancient')
+} else if (opt$maltex.filter == 'default') {maltex.mode <- 'default'
+} else {maltex.mode <- c('default','ancient'); print('Non standard malt filter mode provided, defaulting to <def_anc>')} 
+if ( !is.null(opt$dmgcutoff) ) {dmgcutoff <- opt$dmgcutoff} else {dmgcutoff <- 0} 
+if ( !is.null(opt$readdistcutoff) ) {readdistcutoff <- opt$readdistcutoff} else {readdistcutoff <- 0}
+if ( !is.null(opt$defratio) ) {defratio <- opt$defratio} else {defratio <- 0.9}
+if ( !is.null(opt$ancratio) ) {ancratio <- opt$ancratio} else {ancratio <- 0.8}
+if ( is.null(opt$sequencestrategy) ) {paired_end_mode <- FALSE
+} else if (opt$sequencestrategy =='pe') {paired_end_mode <- TRUE
+} else { paired_end_mode <- FALSE }
+if ( !is.null(opt$firm) ) {firm <- TRUE} else {firm <- FALSE}
+
+## check if custom filtering values are acceptable
+if (dmgcutoff < 0 || dmgcutoff > 1) {stop("damage cutoff value should be within range of [0,1]")}
+if (readdistcutoff < 0 || readdistcutoff > 1) {stop("coverage cutoff value should be within range of [0,1]")}
+if (defratio < 0 || defratio > 1) {stop("default ratio value should be within range of [0,1] (but likely below 0.9)")}
+if (ancratio < 0 || ancratio > 1) {stop("ancient ratio value should be within range of [0,1] (but likely below 0.8)")}
 
 unq.spec <- unique(gsub(" ","_",scan(file=opt$node,sep="\n",what='character'))) # scan nodes, kill ' ', unique is solely sanity control
 
@@ -174,7 +205,7 @@ unq.spec <- unique(gsub(" ","_",scan(file=opt$node,sep="\n",what='character'))) 
 all.inds <- colnames(as.matrix(read.table(paste(path,'/default/RunSummary.txt',sep=''),sep="\t",header=T,stringsAsFactors=F,row.names=1,check.names=FALSE,comment.char='')))
 
 ### Extract MetaData for all Sample-Species Pairs
-out.lists <- mclapply(1:length(all.inds), function(j) extract.stats5( all.inds[j],path,maltex.mode ), mc.cores=opt$threads )
+out.lists <- mclapply(1:length(all.inds), function(j) extract.stats5( all.inds[j],path,maltex.mode,paired_end_mode ), mc.cores=opt$threads )
 data <- do.call(rbind, out.lists)
 data <- data.frame(data,stringsAsFactors=F)
 data[, c(4:9,11:16) ] = apply(data[ , c(4:9,11:16)], 2, function(x) as.numeric(as.character(x)))
@@ -182,12 +213,25 @@ data[, c(4:9,11:16) ] = apply(data[ , c(4:9,11:16)], 2, function(x) as.numeric(a
 #############
 ## Extract scores and build matrix
 #############
+
+## scores are based on edit distance ratios, and damage
+## only nodes with one of these + a read distribution above the cutoff will be output to pdf format/in the heatmap
 if(length(maltex.mode) == 2){
     ## Default-Ancient
-    trg1 <- data[ data[,'def.dr4'] >= 0.9 & !is.na(data[,'def.dr4']) , ] ## Step1: DiffRatio0-4: > 0.9
-    trg2 <- data[ data[,'def.mapDam'] > 0 & !is.na(data[,'def.mapDam']) , ] ## Step2: Terminal Damage Present
-    trg3 <- data[ data[,'anc.dr4'] > 0.8 & !is.na(data[,'anc.dr4']) , ] ## Step3: DiffRatio1-4: > 0.8
+    
+    ## if firm only output step 3 (all thresholds met), default only needs to satisfy default ratio + read distribution
+    if ( firm ) {
+        positions <- data[ data[,'def.dr4'] >= defratio & !is.na(data[,'def.dr4']) & data[,'def.rd'] > readdistcutoff & data[,'def.mapDam'] > dmgcutoff & !is.na(data[,'def.mapDam']) & data[,'anc.dr4'] > ancratio & !is.na(data[,'anc.dr4']), ]
+        trg1 <- positions
+        trg2 <- positions
+        trg3 <- positions
+    } else {
+        trg1 <- data[ data[,'def.dr4'] >= defratio & !is.na(data[,'def.dr4']) & data[,'def.rd'] > readdistcutoff, ] ## Step1: DiffRatio0-4: > defratio (default = 0.9) and read distribution > cutoff (default = 0)
+        trg2 <- data[ data[,'def.mapDam'] > dmgcutoff & !is.na(data[,'def.mapDam']) & data[,'def.rd'] > readdistcutoff, ] ## Step2: Terminal Damage Present (default = 0) #TODO: fix mapDam cutoff, currently it is ANY position has > cutoff, need first position #maybe C>T_1
+        trg3 <- data[ data[,'anc.dr4'] > ancratio & !is.na(data[,'anc.dr4']) & data[,'def.rd'] > readdistcutoff, ] ## Step3: DiffRatio1-4: > ancratio (default = 0.8)
+    }
 
+    
     # Build Matrix for Heatmap
     res <- matrix(1L,nrow=length(unq.spec),ncol=length(all.inds),dimnames=list(a=unq.spec,b=all.inds))
     for (p in rownames(trg1)){
@@ -199,10 +243,10 @@ if(length(maltex.mode) == 2){
             res[ trg3[p,'spec']  , trg3[p,'id'] ] <- 4
         }
     }
-} else {
+} else { 
     ## Default: Extract scores and build matrix
-    trg1 <- data[ data[,'def.dr4'] >= 0.9 & !is.na(data[,'def.dr4']) , ] ## Step1: DiffRatio0-4: > 0.9
-    trg2 <- data[ data[,'def.mapDam'] > 0 & !is.na(data[,'def.mapDam']) , ] ## Step2: Terminal Damage Present
+    trg1 <- data[ data[,'def.dr4'] >= defratio & !is.na(data[,'def.dr4']) & data[,'def.rd'] > readdistcutoff , ] ## Step1: DiffRatio0-4: > defratio (default = 0.9)
+    trg2 <- data[ data[,'def.mapDam'] > dmgcutoff & !is.na(data[,'def.mapDam']) & data[,'def.rd'] > readdistcutoff , ] ## Step2: Terminal Damage Present (default = 0)
 
     # Build Matrix for Heatmap
     res <- matrix(1L,nrow=length(unq.spec),ncol=length(all.inds),dimnames=list(a=unq.spec,b=all.inds))
@@ -228,7 +272,7 @@ if(length(maltex.mode) == 2){
     mycol=c('lightgray','lightgreen','darkgreen')
     leg.txt <- c('Edit distance','+Damage')
 }
-red.res <- res[, colSums(res) > dim(res)[1] , drop = FALSE ]
+red.res <- res[, colSums(res) > dim(res)[1] , drop = FALSE ] ## drops columns with only 1 (of 1,2,3,4) --> lightgray on heatmap (so if all species for a given sample are lightgray then don't put them in heatmap)
 red.res <- red.res[ rowSums(red.res) > dim(red.res)[2] , , drop = FALSE ]
 
 ## NT & organelle results hat <> in species name (equus), caused bug
@@ -238,15 +282,15 @@ pdf.height <- max(dim(red.res)[1]/2.5,20)
 pdf.width <- max(dim(red.res)[2]/10 , 20)
 pdf(paste(path,'heatmap_overview_Wevid.pdf',sep=""),height=pdf.height,width=pdf.width)
 par(mar=c(5.1,30.1,25.1,2.1))
-image(x=1:ncol(red.res),y=1:nrow(red.res),z=t(red.res),col=mycol,axes=F,ylab="",xlab="",zlim=c(1,4))
-axis(side=2,at=1:nrow(red.res),labels=rownames(red.res),las=1,cex.axis=2)
-axis(side=3,at=1:ncol(red.res),labels=colnames(red.res),las=2,cex.axis=2,tick=F)
-abline(h=1:length(rownames(red.res))+0.5,col='darkgrey') # add horizontal lines for improved vision
-abline(v=1:length(colnames(red.res))+0.5,col='darkgrey') # add vertical lines for improved vision
-xleg <- ncol(red.res)-(ncol(red.res)*1.35)
-yleg <- nrow(red.res)+5
-legend(x=xleg,y=yleg, legend=leg.txt, fill = mycol[-1],xpd=T,cex=3)
-dev.off()
+if(ncol(red.res)!=0){image(x=1:ncol(red.res),y=1:nrow(red.res),z=t(red.res),col=mycol,axes=F,ylab="",xlab="",zlim=c(1,4))
+	axis(side=2,at=1:nrow(red.res),labels=rownames(red.res),las=1,cex.axis=2)
+	axis(side=3,at=1:ncol(red.res),labels=colnames(red.res),las=2,cex.axis=2,tick=F)
+	abline(h=1:length(rownames(red.res))+0.5,col='darkgrey') # add horizontal lines for improved vision
+	abline(v=1:length(colnames(red.res))+0.5,col='darkgrey') # add vertical lines for improved vision
+	xleg <- ncol(red.res)-(ncol(red.res)*1.35)
+	yleg <- nrow(red.res)+5
+	legend(x=xleg,y=yleg, legend=leg.txt, fill = mycol[-1],xpd=T,cex=3)
+	dev.off()
 
 ## Export table format
 red.res.tab <- cbind(rownames(red.res), data.frame(red.res, row.names=NULL))
@@ -271,6 +315,15 @@ if (!is.null(opt$heatmap.json)) {
     ## convert and save list as json
     write_json(red.res.json, path = paste(path,'heatmap_overview_Wevid.json',sep = ""), pretty = T)
 }
+} else { print('No hit with at least a declining edit distance') }
+## Export postprocessing parameters text file
+if (length(maltex.mode)==2) {mltexmd <- 'def_anc'} else {mltexmd <- 'default'}
+
+output_parameters_table <- data.frame(
+    variable=c('malt_extract_mode','malt_extract_output_folder','paired_end_mode','node_list','damage_cutoff','read_distribution_cutoff','default_edit_distance_ratio','ancient_edit_distance_ratio','firm_cutoff_for_output'),
+    values=c(mltexmd,opt$rmaex.out.fld,toString(paired_end_mode),opt$node,dmgcutoff,readdistcutoff,defratio,ancratio,firm)
+)
+write.table(output_parameters_table, file = paste(path,"post_processing_parameters.txt",sep=""), sep="\t", row.names=FALSE, col.names=TRUE,quote=FALSE)
 
 ########################
 ###### Candidate Profile PDFs
